@@ -1,0 +1,6 @@
+[workspace]
+members = ["day-*"]
+
+[workspace.dependencies]
+itertools = "0.10.5"
+snafu = { version = "0.7.3", features = ["backtraces-impl-std", "rust_1_61"] }
