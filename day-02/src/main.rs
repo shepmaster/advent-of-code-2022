@@ -11,6 +11,10 @@ fn main() -> Result<()> {
     println!("{part1}");
     assert_eq!(9241, part1);
 
+    let part2 = total_score_part2(INPUT)?;
+    println!("{part2}");
+    assert_eq!(14610, part2);
+
     Ok(())
 }
 
@@ -25,6 +29,24 @@ fn total_score(s: &str) -> Result<Score> {
     itertools::process_results(hands, |hands| {
         hands
             .map(|(them, us)| play(them, us) + us.score())
+            .sum::<Score>()
+    })
+}
+
+fn total_score_part2(s: &str) -> Result<Score> {
+    let hands = s.lines().map(|l| {
+        let mut l = l.splitn(2, ' ').fuse();
+        let them = l.next().context(ThemMissingSnafu)?.parse::<Them>()?;
+        let outcome = l.next().context(OutcomeMissingSnafu)?.parse::<Outcome>()?;
+        <Result<_>>::Ok((them, outcome))
+    });
+
+    itertools::process_results(hands, |hands| {
+        hands
+            .map(|(them, outcome)| {
+                let us = outcome - them;
+                play(them, us) + us.score()
+            })
             .sum::<Score>()
     })
 }
@@ -110,11 +132,60 @@ impl FromStr for Us {
     }
 }
 
+#[derive(Debug, Copy, Clone)]
+enum Outcome {
+    Lose,
+    Draw,
+    Win,
+}
+
+#[derive(Debug, Snafu)]
+struct UnknownOutcomeError {
+    s: String,
+}
+
+impl FromStr for Outcome {
+    type Err = UnknownOutcomeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        use Outcome::*;
+
+        Ok(match s {
+            "X" => Lose,
+            "Y" => Draw,
+            "Z" => Win,
+            _ => return UnknownOutcomeSnafu { s }.fail(),
+        })
+    }
+}
+
+impl ::core::ops::Sub<Them> for Outcome {
+    type Output = Us;
+
+    fn sub(self, rhs: Them) -> Self::Output {
+        match (rhs, self) {
+            (Them::Rock, Outcome::Lose) => Us::Scissors,
+            (Them::Rock, Outcome::Draw) => Us::Rock,
+            (Them::Rock, Outcome::Win) => Us::Paper,
+
+            (Them::Paper, Outcome::Lose) => Us::Rock,
+            (Them::Paper, Outcome::Draw) => Us::Paper,
+            (Them::Paper, Outcome::Win) => Us::Scissors,
+
+            (Them::Scissors, Outcome::Lose) => Us::Paper,
+            (Them::Scissors, Outcome::Draw) => Us::Scissors,
+            (Them::Scissors, Outcome::Win) => Us::Rock,
+        }
+    }
+}
+
 #[derive(Debug, Snafu)]
 enum Error {
     ThemMissing,
 
     UsMissing,
+
+    OutcomeMissing,
 
     #[snafu(context(false))]
     BadThem {
@@ -124,6 +195,11 @@ enum Error {
     #[snafu(context(false))]
     BadUs {
         source: UnknownUsError,
+    },
+
+    #[snafu(context(false))]
+    BadOutcome {
+        source: UnknownOutcomeError,
     },
 }
 
@@ -139,6 +215,13 @@ mod test {
     #[snafu::report]
     fn example() -> Result<()> {
         assert_eq!(15, total_score(INPUT)?);
+        Ok(())
+    }
+
+    #[test]
+    #[snafu::report]
+    fn example_part2() -> Result<()> {
+        assert_eq!(12, total_score_part2(INPUT)?);
         Ok(())
     }
 }
