@@ -19,40 +19,46 @@ fn main() -> Result<()> {
 }
 
 fn max_calories(s: &str) -> Result<u32> {
-    summed_calories_by_elf(s)?
-        .into_iter()
-        .max()
-        .context(NoNumbersSnafu)
+    itertools::process_results(summed_calories_by_elf(s), |i| {
+        i.max().context(NoNumbersSnafu)
+    })?
 }
 
 fn max_n_calories(s: &str, n: usize) -> Result<u32> {
-    Ok(summed_calories_by_elf(s)?
-        .into_iter()
-        .sorted_unstable_by(|l, r| l.cmp(r).reverse())
-        .take(n) // What if there wasn't N?
-        .sum())
+    itertools::process_results(summed_calories_by_elf(s), |i| {
+        i.sorted_unstable_by(|l, r| l.cmp(r).reverse())
+            .take(n) // What if there wasn't N?
+            .sum()
+    })
 }
 
-// SAD: Returning a `Vec`
-fn summed_calories_by_elf(s: &str) -> Result<Vec<u32>> {
-    let grouped_by_elf = s.lines().group_by(|l| l.is_empty());
+fn summed_calories_by_elf(s: &str) -> impl Iterator<Item = Result<u32>> + '_ {
+    let mut lines = s.lines();
 
-    grouped_by_elf
-        .into_iter()
-        .flat_map(|(is_empty, group)| (!is_empty).then_some(group))
-        .map(|group| {
-            group
-                .map(|l| l.trim().parse::<u32>().context(BadNumberSnafu))
-                .sum::<Result<u32>>()
-        })
-        .collect()
+    std::iter::from_fn(move || {
+        let mut sum = None;
+
+        while let Some(l) = lines.next() {
+            if l.is_empty() {
+                break;
+            }
+
+            let v = match l.parse::<u32>().context(BadNumberSnafu) {
+                Ok(v) => v,
+                Err(e) => return Some(Err(e)),
+            };
+
+            *sum.get_or_insert(0) += v;
+        }
+
+        sum.map(Ok)
+    })
 }
 
 #[derive(Debug, Snafu)]
 enum Error {
     BadNumber { source: ParseIntError },
     NoNumbers,
-    NotEnoughNumbers,
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
