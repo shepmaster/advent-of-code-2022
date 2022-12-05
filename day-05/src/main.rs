@@ -1,20 +1,33 @@
 #![feature(get_many_mut)]
 
 use core::{slice::GetManyMutError, str::FromStr};
+use itertools::Either;
 use snafu::prelude::*;
 
 const INPUT: &str = include_str!("../input");
 
 #[snafu::report]
 fn main() -> Result<()> {
-    let part1 = top_crates(INPUT)?;
+    let part1 = top_crates_9000(INPUT)?;
     println!("{}", String::from_utf8_lossy(&part1));
     assert_eq!(b"QMBMJDFTD"[..], part1);
+
+    let part2 = top_crates_9001(INPUT)?;
+    println!("{}", String::from_utf8_lossy(&part2));
+    assert_eq!(b"NBTVTJNFJ"[..], part2);
 
     Ok(())
 }
 
-fn top_crates(s: &str) -> Result<Vec<u8>> {
+fn top_crates_9000(s: &str) -> Result<Vec<u8>> {
+    top_crates_common(s, true)
+}
+
+fn top_crates_9001(s: &str) -> Result<Vec<u8>> {
+    top_crates_common(s, false)
+}
+
+fn top_crates_common(s: &str, reverse: bool) -> Result<Vec<u8>> {
     let mut lines = s.lines();
 
     let column_lines = lines.by_ref().take_while(|l| !l.is_empty());
@@ -52,7 +65,15 @@ fn top_crates(s: &str) -> Result<Vec<u8>> {
             .context(MovingColumnsToSelfSnafu)?;
 
         let start = from.len() - count;
-        to.extend(from.drain(start..).rev())
+        let removed = from.drain(start..);
+
+        let removed = if reverse {
+            Either::Left(removed.rev())
+        } else {
+            Either::Right(removed)
+        };
+
+        to.extend(removed)
     }
 
     Ok(columns.iter().flat_map(|c| c.last()).copied().collect())
@@ -120,7 +141,14 @@ mod test {
     #[test]
     #[snafu::report]
     fn example() -> Result<()> {
-        assert_eq!(&b"CMZ"[..], top_crates(INPUT)?);
+        assert_eq!(&b"CMZ"[..], top_crates_9000(INPUT)?);
+        Ok(())
+    }
+
+    #[test]
+    #[snafu::report]
+    fn example_part2() -> Result<()> {
+        assert_eq!(&b"MCD"[..], top_crates_9001(INPUT)?);
         Ok(())
     }
 }
