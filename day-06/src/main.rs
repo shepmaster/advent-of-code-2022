@@ -9,15 +9,27 @@ fn main() -> Result<()> {
     println!("{part1}");
     assert_eq!(1282, part1);
 
+    let part2 = location_of_first_start_of_message(INPUT)?;
+    println!("{part2}");
+    assert_eq!(3513, part2);
+
     Ok(())
 }
 
 fn location_of_first_start_of_packet(s: &str) -> Result<usize> {
+    common(s, 4)
+}
+
+fn location_of_first_start_of_message(s: &str) -> Result<usize> {
+    common(s, 14)
+}
+
+fn common(s: &str, width: usize) -> Result<usize> {
     s.trim()
         .as_bytes()
-        .windows(4)
+        .windows(width)
         .enumerate()
-        .find_map(|(i, w)| w.iter().all_unique().then_some(i + 4))
+        .find_map(|(i, w)| w.iter().all_unique().then_some(i + width))
         .context(NoStartFoundSnafu)
 }
 
@@ -32,21 +44,34 @@ type Result<T, E = Error> = std::result::Result<T, E>;
 mod test {
     use super::*;
 
-    const INPUTS: &[(&str, usize)] = &[
-        ("mjqjpqmgbljsphdztnvjfqwrcgsmlb", 7),
-        ("bvwbjplbgvbhsrlpgdmjqwftvncz", 5),
-        ("nppdvjthqldpwncqszvftbrmjlhg", 6),
-        ("nznrnfrfntjfmvfwmzdfjlvtqnbhcprsg", 10),
-        ("zcfzfwzzqfrljwzlrfnpqdbhtmscgvjw", 11),
+    const INPUTS: &[(&str, usize, usize)] = &[
+        ("mjqjpqmgbljsphdztnvjfqwrcgsmlb", 7, 19),
+        ("bvwbjplbgvbhsrlpgdmjqwftvncz", 5, 23),
+        ("nppdvjthqldpwncqszvftbrmjlhg", 6, 23),
+        ("nznrnfrfntjfmvfwmzdfjlvtqnbhcprsg", 10, 29),
+        ("zcfzfwzzqfrljwzlrfnpqdbhtmscgvjw", 11, 26),
     ];
 
     #[test]
     #[snafu::report]
     fn example() -> Result<()> {
-        for (i, &(input, location)) in INPUTS.into_iter().enumerate() {
+        for (i, &(input, location, _)) in INPUTS.into_iter().enumerate() {
             assert_eq!(
                 location,
                 location_of_first_start_of_packet(input)?,
+                "Test input {i} ({input:?}) failed"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[snafu::report]
+    fn example_part2() -> Result<()> {
+        for (i, &(input, _, location)) in INPUTS.into_iter().enumerate() {
+            assert_eq!(
+                location,
+                location_of_first_start_of_message(input)?,
                 "Test input {i} ({input:?}) failed"
             );
         }
