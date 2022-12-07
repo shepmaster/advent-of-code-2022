@@ -1,6 +1,9 @@
 use snafu::prelude::*;
 use std::collections::BTreeMap;
 
+const TOTAL_DISK_SIZE: u64 = 70_000_000;
+const UPDATE_SIZE: u64 = 30_000_000;
+
 const INPUT: &str = include_str!("../input");
 
 #[snafu::report]
@@ -8,6 +11,10 @@ fn main() -> Result<()> {
     let part1 = sum_of_directories_less_than_100000(INPUT)?;
     println!("{part1}");
     assert_eq!(1491614, part1);
+
+    let part2 = size_of_smallest_directory_to_allow_update(INPUT)?;
+    println!("{part2}");
+    assert_eq!(6400111, part2);
 
     Ok(())
 }
@@ -21,6 +28,20 @@ fn sum_of_directories_less_than_100000(s: &str) -> Result<u64> {
         .sum::<u64>();
 
     Ok(total)
+}
+
+fn size_of_smallest_directory_to_allow_update(s: &str) -> Result<u64> {
+    let root = build_directory_hierarchy(s)?;
+
+    let used_size = root.total_size();
+    let free_size = TOTAL_DISK_SIZE - used_size;
+    let additional_size = UPDATE_SIZE - free_size;
+
+    root.directories()
+        .map(|d| d.total_size())
+        .filter(|&s| s >= additional_size)
+        .min()
+        .context(NoAvailableDirectorySnafu)
 }
 
 fn build_directory_hierarchy(s: &str) -> Result<Directory<'_>> {
@@ -165,6 +186,8 @@ enum Error {
     MissingFileEntryName,
 
     MissingOutput,
+
+    NoAvailableDirectory,
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -179,6 +202,13 @@ mod test {
     #[snafu::report]
     fn example() -> Result<()> {
         assert_eq!(95437, sum_of_directories_less_than_100000(INPUT)?);
+        Ok(())
+    }
+
+    #[test]
+    #[snafu::report]
+    fn example_part2() -> Result<()> {
+        assert_eq!(24933642, size_of_smallest_directory_to_allow_update(INPUT)?);
         Ok(())
     }
 }
