@@ -1,29 +1,77 @@
 #![feature(get_many_mut)]
 
+use image::{codecs::gif::GifEncoder, Delay, Frame, RgbaImage};
 use snafu::prelude::*;
-use std::{collections::BTreeSet, str::FromStr};
+use std::{collections::BTreeSet, fs::File, io::BufWriter, str::FromStr, time::Duration};
 
 const INPUT: &str = include_str!("../input");
 
 #[snafu::report]
 fn main() -> Result<()> {
-    let part1 = unique_tail_positions::<2>(INPUT)?;
+    let part1 = unique_tail_positions::<2>(INPUT, |_| {})?;
     println!("{part1}");
     assert_eq!(6384, part1);
 
-    let part2 = unique_tail_positions::<10>(INPUT)?;
+    let f = File::create("/tmp/rope.gif").unwrap();
+    let f = BufWriter::new(f);
+    let mut f = GifEncoder::new(f);
+
+    // -119 -> 185
+    const W: u32 = 400;
+    // -280 ->  67
+    const H: u32 = 600;
+
+    // let mut x_min = 0;
+    // let mut x_max = 0;
+    // let mut y_min = 0;
+    // let mut y_max = 0;
+
+    let part2 = unique_tail_positions::<10>(INPUT, |knots| {
+        let mut image = RgbaImage::new(W, H);
+        for (x, y, px) in image.enumerate_pixels_mut() {
+            let x = i32::try_from(x).unwrap() - i32::try_from(W / 2).unwrap();
+            let y = i32::try_from(y).unwrap() - i32::try_from(H / 2).unwrap();
+
+            let light_up = knots.iter().any(|&c| c == (x, y));
+            px.0 = if light_up {
+                [0, 255, 0, 255]
+            } else {
+                [127, 0, 127, 255]
+            };
+        }
+
+        // for &(x, y) in knots {
+        //     use std::cmp;
+
+        //     x_min = cmp::min(x_min, x);
+        //     x_max = cmp::max(x_max, x);
+        //     y_min = cmp::min(y_min, y);
+        //     y_max = cmp::max(y_max, y);
+        // }
+
+        let frame = Frame::from_parts(
+            image,
+            0,
+            0,
+            Delay::from_saturating_duration(Duration::from_millis(50)),
+        );
+        f.encode_frame(frame).unwrap();
+    })?;
     println!("{part2}");
     assert_eq!(2734, part2);
+
+    // dbg!(x_min, x_max, y_min, y_max);
 
     Ok(())
 }
 
-fn unique_tail_positions<const N: usize>(s: &str) -> Result<usize> {
+fn unique_tail_positions<const N: usize>(s: &str, mut f: impl FnMut(&[Coord; N])) -> Result<usize> {
     let mut state = State::<N>::default();
 
     for line in s.lines() {
         let command = line.parse::<Command<u8>>().context(InvalidCommandSnafu)?;
         command.try_repeat(|c| state.move_once(c))?;
+        f(&state.knots);
     }
 
     Ok(state.tail_visited())
@@ -175,21 +223,21 @@ mod test {
     #[test]
     #[snafu::report]
     fn example() -> Result<()> {
-        assert_eq!(13, unique_tail_positions::<2>(INPUT)?);
+        assert_eq!(13, unique_tail_positions::<2>(INPUT, |_| {})?);
         Ok(())
     }
 
     #[test]
     #[snafu::report]
     fn example_part2() -> Result<()> {
-        assert_eq!(1, unique_tail_positions::<10>(INPUT)?);
+        assert_eq!(1, unique_tail_positions::<10>(INPUT, |_| {})?);
         Ok(())
     }
 
     #[test]
     #[snafu::report]
     fn example_part2_input2() -> Result<()> {
-        assert_eq!(36, unique_tail_positions::<10>(INPUT2)?);
+        assert_eq!(36, unique_tail_positions::<10>(INPUT2, |_| {})?);
         Ok(())
     }
 }
