@@ -17,6 +17,10 @@ fn main() -> Result<()> {
     println!("{part1}");
     assert_eq!(88208, part1);
 
+    let part2 = monkey_business_high_stakes(INPUT)?;
+    println!("{part2}");
+    assert_eq!(21115867968, part2);
+
     Ok(())
 }
 
@@ -27,37 +31,70 @@ fn monkey_business(s: &str) -> Result<usize> {
         .context(MonkeyInvalidSnafu)?;
 
     for _round in 0..20 {
-        for (monkey, items_inspected) in &monkeys {
-            let mut monkey = monkey.borrow_mut();
+        one_round::<true>(&monkeys);
+    }
 
-            let items = mem::take(&mut monkey.starting_items);
-            items_inspected.update(|v| v + items.len());
+    Ok(product_of_two_most_active_monkey_actions(&monkeys))
+}
 
-            for item in items {
-                let mut worry_level = monkey.apply_operation(item);
+fn monkey_business_high_stakes(s: &str) -> Result<usize> {
+    let monkeys = Monkey::parse_barrel(s)
+        .map_ok(|m| (RefCell::new(m), Cell::new(0)))
+        .collect::<MonkeyParseResult<Vec<_>>>()
+        .context(MonkeyInvalidSnafu)?;
 
-                // Always bored?
-                worry_level /= 3;
+    let max_relevant_worry_level = monkeys
+        .iter()
+        .map(|(m, _)| m.borrow().test.0)
+        .product::<WorryLevel>();
 
-                let target = if monkey.apply_test(worry_level) {
-                    monkey.if_true
-                } else {
-                    monkey.if_false
-                };
-
-                let mut target = monkeys[target.0].0.borrow_mut();
-                target.starting_items.push_back(worry_level);
+    for _round in 0..10_000 {
+        one_round::<false>(&monkeys);
+        for (m, _) in &monkeys {
+            let mut m = m.borrow_mut();
+            for item in &mut m.starting_items {
+                *item %= max_relevant_worry_level;
             }
         }
     }
 
-    Ok(monkeys
+    Ok(product_of_two_most_active_monkey_actions(&monkeys))
+}
+
+fn one_round<const DECREASE_WORRY: bool>(monkeys: &[(RefCell<Monkey>, Cell<usize>)]) {
+    for (monkey, items_inspected) in monkeys {
+        let mut monkey = monkey.borrow_mut();
+
+        let items = mem::take(&mut monkey.starting_items);
+        items_inspected.update(|v| v + items.len());
+
+        for item in items {
+            let mut worry_level = monkey.apply_operation(item);
+
+            if DECREASE_WORRY {
+                worry_level /= 3;
+            }
+
+            let target = if monkey.apply_test(worry_level) {
+                monkey.if_true
+            } else {
+                monkey.if_false
+            };
+
+            let mut target = monkeys[target.0].0.borrow_mut();
+            target.starting_items.push_back(worry_level);
+        }
+    }
+}
+
+fn product_of_two_most_active_monkey_actions(monkeys: &[(RefCell<Monkey>, Cell<usize>)]) -> usize {
+    monkeys
         .iter()
         .map(|(_, n_items)| n_items.get())
         .sorted()
         .rev()
         .take(2)
-        .product())
+        .product()
 }
 
 type MonkeyId = usize;
@@ -352,6 +389,13 @@ mod test {
     #[snafu::report]
     fn example() -> Result<()> {
         assert_eq!(10605, monkey_business(INPUT)?);
+        Ok(())
+    }
+
+    #[test]
+    #[snafu::report]
+    fn example_part2() -> Result<()> {
+        assert_eq!(2713310158, monkey_business_high_stakes(INPUT)?);
         Ok(())
     }
 }
