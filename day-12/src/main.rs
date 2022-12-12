@@ -14,6 +14,10 @@ fn main() -> Result<()> {
     assert!(part1 > 387); // Was not testing that we could step to the end coordinate
     assert_eq!(391, part1);
 
+    let part2 = fewest_steps_from_scenic_start_to_goal(INPUT)?;
+    println!("{part2}");
+    assert_eq!(386, part2);
+
     Ok(())
 }
 
@@ -22,6 +26,20 @@ fn fewest_steps_to_goal(s: &str) -> Result<usize> {
     let path = find_path(&height_map, start, end).context(NoPathFoundSnafu)?;
 
     Ok(path.steps())
+}
+
+fn fewest_steps_from_scenic_start_to_goal(s: &str) -> Result<usize> {
+    let (height_map, _start, end) = parse_height_map(s)?;
+
+    let starts = height_map
+        .iter()
+        .flat_map(|(&coord, &height)| (height == 0).then_some(coord));
+
+    starts
+        .flat_map(|start| find_path(&height_map, start, end))
+        .map(|p| p.steps())
+        .min()
+        .context(NoMinimalPathFoundSnafu)
 }
 
 type Coord = (usize, usize);
@@ -168,6 +186,9 @@ enum Error {
 
     #[snafu(display("No path was found between the start and end points"))]
     NoPathFound,
+
+    #[snafu(display("No path was found between any start point and the end point"))]
+    NoMinimalPathFound,
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -182,6 +203,13 @@ mod test {
     #[snafu::report]
     fn example() -> Result<()> {
         assert_eq!(31, fewest_steps_to_goal(INPUT)?);
+        Ok(())
+    }
+
+    #[test]
+    #[snafu::report]
+    fn example_part2() -> Result<()> {
+        assert_eq!(29, fewest_steps_from_scenic_start_to_goal(INPUT)?);
         Ok(())
     }
 }
