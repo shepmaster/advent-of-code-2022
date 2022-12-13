@@ -9,6 +9,10 @@ fn main() -> Result<()> {
     println!("{part1}");
     assert_eq!(5843, part1);
 
+    let part2 = decoder_key(INPUT)?;
+    println!("{part2}");
+    assert_eq!(26289, part2);
+
     Ok(())
 }
 
@@ -25,6 +29,38 @@ fn sum_of_indices_of_pairs_in_right_order(s: &str) -> Result<usize> {
             pair.is_in_right_order().then_some(Ok(i))
         })
         .sum()
+}
+
+fn decoder_key(s: &str) -> Result<usize> {
+    let mut packets = s
+        .lines()
+        .filter(|l| !l.is_empty())
+        .map(Packet::from_str)
+        .collect::<PacketParseResult<Vec<_>>>()
+        .context(InvalidPacketSnafu)?;
+
+    let key_a = Packet::make_key(2);
+    let key_b = Packet::make_key(6);
+
+    packets.push(key_a.clone());
+    packets.push(key_b.clone());
+
+    packets.sort();
+
+    let a = packets
+        .iter()
+        .position(|p| p == &key_a)
+        .expect("Manually inserted key 'a' went missing");
+    let b = packets
+        .iter()
+        .position(|p| p == &key_b)
+        .expect("Manually inserted key 'b' went missing");
+
+    // One-based indexing
+    let a = a + 1;
+    let b = b + 1;
+
+    Ok(a * b)
 }
 
 #[derive(Debug)]
@@ -68,7 +104,7 @@ enum PairParseError {
 
 type PairParseResult<T, E = PairParseError> = std::result::Result<T, E>;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 enum Packet {
     Value(u32),
     List(Vec<Self>),
@@ -120,6 +156,14 @@ impl FromStr for Packet {
         let (this, tail) = walking_parse(s)?;
         ensure!(tail.is_empty(), TrailingDataSnafu { tail });
         Ok(this)
+    }
+}
+
+impl Packet {
+    fn make_key(v: u32) -> Self {
+        use Packet::*;
+
+        List(vec![List(vec![Value(v)])])
     }
 }
 
@@ -189,6 +233,8 @@ type PacketParseResult<T, E = PacketParseError> = std::result::Result<T, E>;
 #[derive(Debug, Snafu)]
 enum Error {
     InvalidPair { source: PairParseError },
+
+    InvalidPacket { source: PacketParseError },
 }
 
 type Result<T, E = Error> = std::result::Result<T, E>;
@@ -203,6 +249,13 @@ mod test {
     #[snafu::report]
     fn example() -> Result<()> {
         assert_eq!(13, sum_of_indices_of_pairs_in_right_order(INPUT)?);
+        Ok(())
+    }
+
+    #[test]
+    #[snafu::report]
+    fn example_part2() -> Result<()> {
+        assert_eq!(140, decoder_key(INPUT)?);
         Ok(())
     }
 }
