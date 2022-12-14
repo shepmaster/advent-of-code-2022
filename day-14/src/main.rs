@@ -10,23 +10,36 @@ fn main() -> Result<()> {
     println!("{part1}");
     assert_eq!(1406, part1);
 
+    let part2 = units_of_sand_come_to_rest_infinite_floor(INPUT)?;
+    println!("{part2}");
+    assert_eq!(20870, part2);
+
     Ok(())
 }
 
 fn units_of_sand_come_to_rest(s: &str) -> Result<usize> {
-    let mut map = parse_map(s).context(MapInvalidSnafu)?;
-    let max_y = map
-        .keys()
-        .map(|&(_, y)| y)
-        .max()
-        .context(MapNoMaxValueSnafu)?;
+    let (mut map, max_y) = parse_map_and_max_y(s)?;
 
-    while let ControlFlow::Continue(()) = drop_one_sand(&mut map, max_y) {}
+    while let ControlFlow::Continue(()) = drop_one_sand(&mut map, |_| false, |sand| sand.1 > max_y)
+    {
+    }
 
-    let n_sand = map.values().filter(|s| matches!(s, State::Sand)).count();
-
-    Ok(n_sand)
+    Ok(n_sand(&map))
 }
+
+fn units_of_sand_come_to_rest_infinite_floor(s: &str) -> Result<usize> {
+    let (mut map, max_y) = parse_map_and_max_y(s)?;
+
+    while let ControlFlow::Continue(()) = drop_one_sand(
+        &mut map,
+        |coord| coord.1 >= max_y + 2,
+        |sand| sand == ORIGIN_POINT,
+    ) {}
+
+    Ok(n_sand(&map))
+}
+
+const ORIGIN_POINT: (u32, u32) = (500, 0);
 
 type Dim = u32;
 type Coord = (Dim, Dim);
@@ -38,8 +51,12 @@ enum State {
     Sand,
 }
 
-fn drop_one_sand(map: &mut Map, max_y: Dim) -> ControlFlow<()> {
-    let mut sand = (500, 0);
+fn drop_one_sand(
+    map: &mut Map,
+    mut wall_predicate: impl FnMut(Coord) -> bool,
+    mut complete_predicate: impl FnMut(Coord) -> bool,
+) -> ControlFlow<()> {
+    let mut sand = ORIGIN_POINT;
 
     loop {
         let d = (sand.0, sand.1 + 1);
@@ -47,18 +64,36 @@ fn drop_one_sand(map: &mut Map, max_y: Dim) -> ControlFlow<()> {
         let dr = (d.0 + 1, d.1);
 
         let candidates = [d, dl, dr];
-        match candidates.into_iter().find(|c| !map.contains_key(c)) {
+        match candidates
+            .into_iter()
+            .find(|c| !(map.contains_key(c) || wall_predicate(*c)))
+        {
             Some(next) => sand = next,
             None => {
-                map.insert(sand, State::Sand);
-                return ControlFlow::Continue(());
+                let old_state = map.insert(sand, State::Sand);
+
+                return if old_state.is_some() {
+                    ControlFlow::Break(())
+                } else {
+                    ControlFlow::Continue(())
+                };
             }
         }
 
-        if sand.1 > max_y {
+        if complete_predicate(sand) {
             return ControlFlow::Break(());
         }
     }
+}
+
+fn parse_map_and_max_y(s: &str) -> Result<(Map, Dim)> {
+    let map = parse_map(s).context(MapInvalidSnafu)?;
+    let max_y = map
+        .keys()
+        .map(|&(_, y)| y)
+        .max()
+        .context(MapNoMaxValueSnafu)?;
+    Ok((map, max_y))
 }
 
 fn parse_map(s: &str) -> ParseMapResult<Map> {
@@ -103,6 +138,10 @@ where
     a
 }
 
+fn n_sand(map: &Map) -> usize {
+    map.values().filter(|s| matches!(s, State::Sand)).count()
+}
+
 #[derive(Debug, Clone, Snafu)]
 #[snafu(module)]
 enum ParseMapError {
@@ -132,6 +171,13 @@ mod test {
     #[snafu::report]
     fn example() -> Result<()> {
         assert_eq!(24, units_of_sand_come_to_rest(INPUT)?);
+        Ok(())
+    }
+
+    #[test]
+    #[snafu::report]
+    fn example_part2() -> Result<()> {
+        assert_eq!(93, units_of_sand_come_to_rest_infinite_floor(INPUT)?);
         Ok(())
     }
 }
